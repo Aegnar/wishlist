@@ -57,12 +57,16 @@ final class Session
         self::setCookie(session_id() ?: '', time() + self::REMEMBER_LIFETIME);
     }
 
+    /**
+     * Vide les données de session et régénère l'identifiant (au lieu de détruire la session) :
+     * l'ancien identifiant est invalidé, mais une session utilisable reste active pour le reste
+     * de la requête courante (ex. rendu d'un nouveau jeton CSRF après une déconnexion automatique).
+     */
     public static function destroy(): void
     {
         $_SESSION = [];
         if (session_status() === PHP_SESSION_ACTIVE) {
-            self::setCookie('', time() - 3600);
-            session_destroy();
+            session_regenerate_id(true);
         }
     }
 

@@ -3,9 +3,14 @@ declare(strict_types=1);
 
 namespace Tests\Web;
 
+use App\App;
 use App\Auth;
+use App\Csrf;
+use App\Http\Request;
 use App\Http\Response;
 use App\Kernel;
+use App\Router;
+use App\Session;
 use Tests\WebTestCase;
 
 final class AuthFlowTest extends WebTestCase
@@ -114,8 +119,58 @@ final class AuthFlowTest extends WebTestCase
 
         $response = $this->request('POST', '/logout');
 
+        self::assertSame(303, $response->status);
         self::assertSame('/login', $response->headers['Location']);
         self::assertArrayNotHasKey('user_id', $_SESSION);
+    }
+
+    public function testPostAuthenticatedWithCsrfHeaderIsAccepted(): void
+    {
+        $this->loginAs($this->createUser('alice'));
+
+        $response = $this->request('POST', '/logout', ['_csrf' => null], headers: ['HTTP_X_CSRF_TOKEN' => Csrf::token()]);
+
+        self::assertSame(303, $response->status);
+        self::assertSame('/login', $response->headers['Location']);
+    }
+
+    public function testPostAuthenticatedWithMissingCsrfTokenIsRejected(): void
+    {
+        $this->loginAs($this->createUser('alice'));
+
+        $response = $this->request('POST', '/logout', ['_csrf' => null]);
+
+        self::assertSame(403, $response->status);
+    }
+
+    public function testStaleCsrfAfterSessionExpiryIsRefreshedForNextRequest(): void
+    {
+        $this->loginAs($this->createUser('alice'));
+        $_SESSION['last_seen'] = time() - Session::DEFAULT_IDLE - 1;
+
+        // Nouvelle instance d'App (donc nouvel Auth) pour que user() ré-évalue l'expiration
+        // au lieu de renvoyer l'utilisateur déjà mis en cache par loginAs().
+        $freshApp = new App($this->app->config, dirname(__DIR__, 2));
+        $router = new Router();
+        (require dirname(__DIR__, 2) . '/src/routes.php')($router, $freshApp);
+
+        $getResponse = (new Kernel($freshApp, $router))->handle(
+            new Request('GET', '/login', server: ['REMOTE_ADDR' => '127.0.0.1']),
+        );
+
+        self::assertSame(200, $getResponse->status);
+        self::assertArrayNotHasKey('user_id', $_SESSION, "la session expirée a bien été nettoyée");
+        preg_match('/name="_csrf" value="([0-9a-f]{64})"/', $getResponse->body, $matches);
+        self::assertNotEmpty($matches, 'le jeton CSRF doit être rendu dans la page');
+        self::assertSame($_SESSION['_csrf'], $matches[1], 'le jeton rendu doit correspondre au jeton de la session courante');
+
+        $postResponse = (new Kernel($freshApp, $router))->handle(new Request('POST', '/login', post: [
+            '_csrf' => $matches[1],
+            'username' => 'alice',
+            'password' => 'motdepasse-solide',
+        ], server: ['REMOTE_ADDR' => '127.0.0.1']));
+
+        self::assertSame(303, $postResponse->status);
     }
 
     public function testSecurityHeaders(): void

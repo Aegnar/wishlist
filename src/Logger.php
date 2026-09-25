@@ -21,12 +21,16 @@ final class Logger
             "[%s] %s: %s in %s:%d %s\n%s\n",
             date('c'),
             $e::class,
-            $e->getMessage(),
+            // Message encodé en JSON : neutralise les retours à la ligne qu'il pourrait contenir,
+            // pour qu'il ne puisse pas forger de fausses lignes de journal.
+            json_encode($e->getMessage(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             $e->getFile(),
             $e->getLine(),
             json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             $e->getTraceAsString(),
         );
-        @file_put_contents($this->file, $line, FILE_APPEND | LOCK_EX);
+        if (@file_put_contents($this->file, $line, FILE_APPEND | LOCK_EX) === false) {
+            error_log($line);
+        }
     }
 }
