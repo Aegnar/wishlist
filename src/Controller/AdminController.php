@@ -67,7 +67,7 @@ final class AdminController extends Controller
         if ($target === null) {
             return $this->notFound();
         }
-        if ($target['id'] === $this->user()['id']) {
+        if ((int) $target['id'] === (int) $this->user()['id']) {
             $this->flash('error', 'Vous ne pouvez pas désactiver votre propre compte.');
             return $this->redirect('/admin#users');
         }
@@ -79,7 +79,7 @@ final class AdminController extends Controller
 
     public function renameTag(Request $request, array $params): Response
     {
-        return $this->tagAction(function () use ($request, $params): string {
+        return $this->tagAction((int) $params['id'], function () use ($request, $params): string {
             $this->app->tags->rename((int) $params['id'], $this->text($request, 'name'));
             return 'Tag renommé.';
         });
@@ -87,7 +87,7 @@ final class AdminController extends Controller
 
     public function mergeTag(Request $request, array $params): Response
     {
-        return $this->tagAction(function () use ($request, $params): string {
+        return $this->tagAction((int) $params['id'], function () use ($request, $params): string {
             $this->app->tags->merge((int) $params['id'], (int) $this->text($request, 'into'));
             return 'Tags fusionnés.';
         });
@@ -95,7 +95,7 @@ final class AdminController extends Controller
 
     public function deleteTag(Request $request, array $params): Response
     {
-        return $this->tagAction(function () use ($params): string {
+        return $this->tagAction((int) $params['id'], function () use ($params): string {
             if (!$this->app->tags->deleteIfUnused((int) $params['id'])) {
                 throw new InvalidArgumentException('Ce tag est encore utilisé : fusionnez-le plutôt.');
             }
@@ -104,9 +104,12 @@ final class AdminController extends Controller
     }
 
     /** @param callable(): string $action retourne le message de succès, lève InvalidArgumentException sinon */
-    private function tagAction(callable $action): Response
+    private function tagAction(int $id, callable $action): Response
     {
         try {
+            if ($this->app->tags->find($id) === null) {
+                throw new InvalidArgumentException('Tag introuvable.');
+            }
             $this->flash('success', $action());
         } catch (InvalidArgumentException $e) {
             $this->flash('error', $e->getMessage());

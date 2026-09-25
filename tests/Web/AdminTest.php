@@ -127,6 +127,18 @@ final class AdminTest extends WebTestCase
         self::assertNull($this->app->tags->find($unused));
     }
 
+    public function testTagActionsOnUnknownTagReportNotFound(): void
+    {
+        $existing = $this->app->tags->findOrCreate('meuble');
+
+        foreach (['rename' => ['name' => 'Autre'], 'delete' => [], 'merge' => ['into' => (string) $existing]] as $action => $data) {
+            unset($_SESSION['_flash']);
+            $this->request('POST', "/admin/tags/999/$action", $data);
+            self::assertSame([['type' => 'error', 'message' => 'Tag introuvable.']], $_SESSION['_flash'], $action);
+        }
+        self::assertSame('meuble', $this->app->tags->find($existing)['name']);
+    }
+
     public function testRegularUserCannotPostToAdmin(): void
     {
         $this->loginAs($this->createUser('alice'));
