@@ -93,4 +93,24 @@ final class ImageStoreTest extends TestCase
         $this->store->delete(null);
         $this->store->delete('../../etc/passwd');
     }
+
+    public function testDeleteAcceptsThumbnailName(): void
+    {
+        $name = $this->store->storeBytes($this->png(10, 10));
+        $thumbName = str_replace('.webp', '_t.webp', $name);
+
+        // Donner le nom de la MINIATURE doit supprimer les deux fichiers (et non
+        // chercher à tort "<hex>_t_t.webp").
+        $this->store->delete($thumbName);
+
+        self::assertSame([], glob($this->dir . '/*'));
+    }
+
+    public function testStoreBytesRejectsImageOverPixelLimit(): void
+    {
+        // 5000x5000 = 25 000 000 px > MAX_PIXELS (24 000 000).
+        $this->expectException(ImageException::class);
+        $this->expectExceptionMessage('trop grande');
+        $this->store->storeBytes($this->png(5000, 5000));
+    }
 }

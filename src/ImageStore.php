@@ -8,13 +8,14 @@ use InvalidArgumentException;
 
 final class ImageStore
 {
-    public const NAME_PATTERN = '/^[a-f0-9]{32}(_t)?\.webp$/';
+    public const NAME_PATTERN = '/^[a-f0-9]{32}(_t)?\.webp\z/';
     public const MAX_UPLOAD = 8 * 1024 * 1024;
     public const MAX_DOWNLOAD = 5 * 1024 * 1024;
     private const MAX_WIDTH = 1600;
     private const THUMB_WIDTH = 400;
-    private const MAX_PIXELS = 40_000_000;
+    private const MAX_PIXELS = 24_000_000;
     private const QUALITY = 85;
+    private const TOTAL_TIMEOUT = 15.0;
     private const MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
     public function __construct(private string $dir, private UrlGuard $guard)
@@ -72,8 +73,14 @@ final class ImageStore
             throw new ImageException("Impossible d'enregistrer la photo.");
         }
         $base = bin2hex(random_bytes(16));
-        $this->saveResized($image, self::MAX_WIDTH, "$this->dir/$base.webp");
-        $this->saveResized($image, self::THUMB_WIDTH, "$this->dir/{$base}_t.webp");
+        $mainPath = "$this->dir/$base.webp";
+        $this->saveResized($image, self::MAX_WIDTH, $mainPath);
+        try {
+            $this->saveResized($image, self::THUMB_WIDTH, "$this->dir/{$base}_t.webp");
+        } catch (ImageException $e) {
+            @unlink($mainPath);
+            throw $e;
+        }
         return "$base.webp";
     }
 
@@ -82,7 +89,11 @@ final class ImageStore
         if ($name === null || preg_match(self::NAME_PATTERN, $name) !== 1) {
             return;
         }
-        foreach ([$name, str_replace('.webp', '_t.webp', $name)] as $file) {
+        // Accepte indifféremment le nom principal ou celui de la miniature :
+        // on retrouve toujours la base commune avant de cibler les deux fichiers
+        // (sinon "<hex>_t.webp" donnerait à tort "<hex>_t_t.webp").
+        $base = preg_replace('/_t\.webp\z/', '.webp', $name);
+        foreach ([$base, str_replace('.webp', '_t.webp', $base)] as $file) {
             if (is_file("$this->dir/$file")) {
                 @unlink("$this->dir/$file");
             }
@@ -120,18 +131,35 @@ final class ImageStore
             return $image;
         }
         $exif = @exif_read_data('data://image/jpeg;base64,' . base64_encode($bytes));
-        $rotated = match ((int) ($exif['Orientation'] ?? 1)) {
-            3 => imagerotate($image, 180, 0),
-            6 => imagerotate($image, -90, 0),
-            8 => imagerotate($image, 90, 0),
-            default => $image,
+        $angle = match ((int) ($exif['Orientation'] ?? 1)) {
+            3 => 180,
+            6 => -90,
+            8 => 90,
+            default => 0,
         };
-        return $rotated === false ? $image : $rotated;
+        if ($angle === 0) {
+            return $image;
+        }
+        $rotated = imagerotate($image, $angle, 0);
+        if ($rotated === false) {
+            return $image;
+        }
+        // La copie pivotée existe désormais : on relâche la référence à la source
+        // pleine résolution pour qu'une seule image de cette taille reste vivante
+        // à la fois (imagerotate() double sinon le pic mémoire, jusqu'à provoquer
+        // un "Allowed memory size exhausted" fatal sur les gros JPEG).
+        unset($image);
+        return $rotated;
     }
 
     private function download(string $url): string
     {
+        $deadline = microtime(true) + self::TOTAL_TIMEOUT;
         for ($redirects = 0; $redirects <= 3; $redirects++) {
+            $remaining = $deadline - microtime(true);
+            if ($remaining <= 0) {
+                throw new ImageException('Délai dépassé.');
+            }
             try {
                 $target = $this->guard->check($url);
             } catch (InvalidArgumentException $e) {
@@ -141,12 +169,18 @@ final class ImageStore
             $ip = str_contains($target['ip'], ':') ? '[' . $target['ip'] . ']' : $target['ip'];
             $curl = curl_init($url);
             curl_setopt_array($curl, [
-                // Force la connexion sur l'IP vérifiée (empêche le « DNS rebinding »).
-                CURLOPT_RESOLVE => [sprintf('%s:%d:%s', $target['host'], $target['port'], $ip)],
+                // Force la connexion sur l'IP vérifiée, quels que soient l'hôte et le
+                // port demandés par ce handle (empêche le « DNS rebinding » et tout
+                // contournement du pin, par ex. via une conversion punycode faite par
+                // curl lui-même — CURLOPT_RESOLVE ne pinnait que la chaîne d'hôte brute).
+                CURLOPT_CONNECT_TO => ['::' . $ip . ':'],
+                // Ignore http_proxy/https_proxy de l'environnement : un proxy pourrait
+                // recevoir la requête et faire lui-même la résolution DNS.
+                CURLOPT_PROXY => '',
                 CURLOPT_FOLLOWLOCATION => false,
                 CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
                 CURLOPT_CONNECTTIMEOUT => 5,
-                CURLOPT_TIMEOUT => 10,
+                CURLOPT_TIMEOUT => max(1, (int) ceil($remaining)),
                 CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; WishlistImageFetcher/1.0)',
                 CURLOPT_HTTPHEADER => ['Accept: image/*'],
                 CURLOPT_WRITEFUNCTION => static function ($handle, string $chunk) use (&$buffer): int {
@@ -157,6 +191,7 @@ final class ImageStore
             $ok = curl_exec($curl);
             $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
             $location = curl_getinfo($curl, CURLINFO_REDIRECT_URL);
+            $primaryIp = (string) curl_getinfo($curl, CURLINFO_PRIMARY_IP);
             $errno = curl_errno($curl);
 
             if (strlen($buffer) > self::MAX_DOWNLOAD) {
@@ -164,6 +199,13 @@ final class ImageStore
             }
             if ($ok === false) {
                 throw new ImageException('Image inaccessible (' . curl_strerror($errno) . ').');
+            }
+            // Vérifie que curl a bien connecté l'IP vérifiée (et non une autre,
+            // ce qui indiquerait que CONNECT_TO n'a pas été honoré).
+            $checkedPacked = @inet_pton($target['ip']);
+            $primaryPacked = @inet_pton($primaryIp);
+            if ($checkedPacked === false || $primaryPacked === false || $primaryPacked !== $checkedPacked) {
+                throw new ImageException('Adresse IP modifiée pendant le téléchargement.');
             }
             if ($status >= 300 && $status < 400 && is_string($location) && $location !== '') {
                 $url = $location;

@@ -15,6 +15,7 @@ final class UrlGuardTest extends TestCase
         return array_map(static fn (string $ip): array => [$ip], [
             '127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.1.10', '169.254.169.254',
             '0.0.0.0', '100.64.0.1', '::1', 'fe80::1', 'fc00::1', '::ffff:127.0.0.1', '::ffff:10.0.0.1',
+            '::7f00:1', '::ffff:0:7f00:1', '64:ff9b::a9fe:a9fe', 'fec0::1', 'ff02::1', '224.0.0.1',
         ]);
     }
 
@@ -69,5 +70,28 @@ final class UrlGuardTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
         $guard->check($url);
+    }
+
+    public function testCheckRejectsNonAsciiHost(): void
+    {
+        // curl punycode-convertit les hôtes IDN et ferait sa propre résolution DNS
+        // sur le nom converti, contournant le pin sur l'IP vérifiée : doit être
+        // refusé avant toute résolution.
+        $guard = new UrlGuard(static fn (string $host): array => ['93.184.216.34']);
+
+        $this->expectException(InvalidArgumentException::class);
+        $guard->check('https://bär.example.test/a.png');
+    }
+
+    public function testCheckAcceptsTrailingDotHost(): void
+    {
+        // Un nom pleinement qualifié (hôte suivi d'un point) reste de l'ASCII pur :
+        // accepté et pinné normalement.
+        $guard = new UrlGuard(static fn (string $host): array => ['93.184.216.34']);
+
+        $target = $guard->check('https://exemple.test./a.png');
+
+        self::assertSame('exemple.test.', $target['host']);
+        self::assertSame('93.184.216.34', $target['ip']);
     }
 }
