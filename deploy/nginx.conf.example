@@ -1,0 +1,48 @@
+# /etc/nginx/sites-available/wishlist — exemple à adapter (remplacer wishlist.example.com).
+# HTTPS : lancer ensuite « certbot --nginx -d wishlist.example.com », qui ajoute le bloc 443 et la redirection.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name wishlist.example.com;
+
+    # Ne pas annoncer la version de nginx.
+    server_tokens off;
+
+    # HSTS : une fois HTTPS fonctionnel (après certbot), décommenter cette ligne dans le bloc
+    # « listen 443 » ajouté par certbot (pas dans le bloc 80), puis recharger nginx.
+    # add_header Strict-Transport-Security "max-age=31536000" always;
+
+    root /var/www/wishlist/public;
+    index index.php;
+    client_max_body_size 10M;
+
+    access_log /var/log/nginx/wishlist.access.log;
+    error_log /var/log/nginx/wishlist.error.log;
+
+    # Fichiers cachés interdits (sauf validation Let's Encrypt).
+    location ~ /\.(?!well-known) { deny all; }
+
+    location = /assets/manifest.webmanifest {
+        default_type application/manifest+json;
+    }
+
+    location /assets/ {
+        expires 7d;
+        access_log off;
+        try_files $uri =404;
+    }
+
+    location / {
+        try_files $uri /index.php$is_args$args;
+    }
+
+    # Seul le front controller est exécuté par PHP.
+    location = /index.php {
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        fastcgi_param DOCUMENT_ROOT $document_root;
+    }
+
+    location ~ \.php$ { return 404; }
+}

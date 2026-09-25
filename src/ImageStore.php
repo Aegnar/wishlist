@@ -144,10 +144,9 @@ final class ImageStore
         if ($rotated === false) {
             return $image;
         }
-        // La copie pivotée existe désormais : on relâche la référence à la source
-        // pleine résolution pour qu'une seule image de cette taille reste vivante
-        // à la fois (imagerotate() double sinon le pic mémoire, jusqu'à provoquer
-        // un "Allowed memory size exhausted" fatal sur les gros JPEG).
+        // unset() ne libère que la référence locale : l'appelant détient encore la source
+        // jusqu'au retour, donc le pic mémoire reste de deux images pleine résolution
+        // (source + copie pivotée) ; la source est libérée quand l'appelant la remplace.
         unset($image);
         return $rotated;
     }

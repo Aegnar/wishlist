@@ -59,4 +59,28 @@ final class AccountTest extends WebTestCase
         self::assertSame('/account', $response->headers['Location']);
         self::assertTrue(password_verify('nouveau-mot-de-passe', $this->app->users->find($this->alice['id'])['password_hash']));
     }
+
+    public function testChangingOwnPasswordKeepsThisDeviceLoggedIn(): void
+    {
+        $this->request('POST', '/account', [
+            'current_password' => 'motdepasse-solide',
+            'new_password' => 'nouveau-mot-de-passe',
+            'new_password_confirm' => 'nouveau-mot-de-passe',
+        ]);
+        $this->newRequestCycle();
+
+        self::assertSame(200, $this->request('GET', '/account')->status);
+    }
+
+    public function testPasswordResetElsewhereLogsThisDeviceOut(): void
+    {
+        self::assertSame(200, $this->request('GET', '/account')->status);
+
+        $this->app->users->updatePassword($this->alice['id'], 'mot-de-passe-provisoire');
+        $this->newRequestCycle();
+        $response = $this->request('GET', '/account');
+
+        self::assertSame(303, $response->status);
+        self::assertSame('/login', $response->headers['Location']);
+    }
 }

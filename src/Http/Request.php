@@ -26,11 +26,30 @@ final class Request
         return new self(
             (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
             rawurldecode(is_string($path) ? $path : '/'),
-            $_GET,
-            $_POST,
+            self::scrub($_GET),
+            self::scrub($_POST),
             $_FILES,
             $_SERVER,
         );
+    }
+
+    /**
+     * Remplace les séquences UTF-8 invalides des valeurs (récursivement) : les traitements mb_*,
+     * json_encode et la base (utf8mb4 strict) ne rencontrent ainsi que du texte valide.
+     *
+     * @param array<array-key, mixed> $values
+     * @return array<array-key, mixed>
+     */
+    public static function scrub(array $values): array
+    {
+        foreach ($values as $key => $value) {
+            if (is_array($value)) {
+                $values[$key] = self::scrub($value);
+            } elseif (is_string($value)) {
+                $values[$key] = mb_scrub($value, 'UTF-8');
+            }
+        }
+        return $values;
     }
 
     public function method(): string

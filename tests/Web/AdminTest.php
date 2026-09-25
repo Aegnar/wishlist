@@ -93,6 +93,14 @@ final class AdminTest extends WebTestCase
         self::assertTrue(password_verify('provisoire-123', $this->app->users->find($marie['id'])['password_hash']));
     }
 
+    public function testResettingOwnPasswordKeepsAdminLoggedIn(): void
+    {
+        $this->request('POST', "/admin/users/{$this->admin['id']}/password", ['password' => 'provisoire-123', 'password_confirm' => 'provisoire-123']);
+        $this->newRequestCycle();
+
+        self::assertSame(200, $this->request('GET', '/admin')->status);
+    }
+
     public function testTagManagement(): void
     {
         $itemA = $this->createItem($this->admin['id'], ['tags' => ['meubles']]);
@@ -117,6 +125,18 @@ final class AdminTest extends WebTestCase
 
         $this->request('POST', "/admin/tags/$unused/delete");
         self::assertNull($this->app->tags->find($unused));
+    }
+
+    public function testTagActionsOnUnknownTagReportNotFound(): void
+    {
+        $existing = $this->app->tags->findOrCreate('meuble');
+
+        foreach (['rename' => ['name' => 'Autre'], 'delete' => [], 'merge' => ['into' => (string) $existing]] as $action => $data) {
+            unset($_SESSION['_flash']);
+            $this->request('POST', "/admin/tags/999/$action", $data);
+            self::assertSame([['type' => 'error', 'message' => 'Tag introuvable.']], $_SESSION['_flash'], $action);
+        }
+        self::assertSame('meuble', $this->app->tags->find($existing)['name']);
     }
 
     public function testRegularUserCannotPostToAdmin(): void

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Tests\Web;
 
+use PDOException;
 use Tests\WebTestCase;
 
 final class ItemFormTest extends WebTestCase
@@ -105,6 +106,35 @@ final class ItemFormTest extends WebTestCase
 
         self::assertSame(422, $response->status);
         self::assertStringContainsString('non autorisée', $response->body);
+    }
+
+    /** Échec simulé de l'écriture en base (trigger) : la photo déjà enregistrée ne doit pas rester orpheline. */
+    private function assertPhotoRemovedWhenDbWriteFails(string $event, callable $request): void
+    {
+        self::pdo()->exec("CREATE TRIGGER wl_test_fail BEFORE $event ON items FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'échec simulé'");
+        $error = null;
+        try {
+            $request();
+        } catch (PDOException $e) {
+            $error = $e;
+        } finally {
+            self::pdo()->exec('DROP TRIGGER IF EXISTS wl_test_fail');
+        }
+
+        self::assertNotNull($error, "l'exception est propagée");
+        self::assertSame(0, $this->uploadsCount(), 'photo supprimée');
+    }
+
+    public function testNewPhotoIsDeletedWhenCreateFails(): void
+    {
+        $this->assertPhotoRemovedWhenDbWriteFails('INSERT', fn () => $this->request('POST', '/item', ['title' => 'Lampe'], ['photo' => $this->uploadedPng()]));
+    }
+
+    public function testNewPhotoIsDeletedWhenUpdateFails(): void
+    {
+        $id = $this->createItem($this->alice['id']);
+
+        $this->assertPhotoRemovedWhenDbWriteFails('UPDATE', fn () => $this->request('POST', "/item/$id", ['title' => 'Lampe'], ['photo' => $this->uploadedPng()]));
     }
 
     public function testEditFormIsPrefilled(): void

@@ -8,6 +8,7 @@ use App\Http\Response;
 use App\ImageException;
 use App\ItemFilter;
 use App\Validator;
+use Throwable;
 
 final class ItemController extends Controller
 {
@@ -36,8 +37,8 @@ final class ItemController extends Controller
 
     public function show(Request $request, array $params): Response
     {
-        $item = $this->app->items->find((int) $params['id']);
-        return $item === null ? $this->notFound() : $this->renderShow($item);
+        $item = $this->findItemOr404($params);
+        return $item instanceof Response ? $item : $this->renderShow($item);
     }
 
     public function create(Request $request, array $params): Response
@@ -56,9 +57,14 @@ final class ItemController extends Controller
         } catch (ImageException $e) {
             return $this->renderForm(null, $this->valuesFromInput($request), ['photo' => $e->getMessage()], 422);
         }
-        $id = $this->app->items->create($result['data'], (int) $this->user()['id']);
-        if ($image !== null) {
-            $this->app->items->setImage($id, $image);
+        try {
+            $id = $this->app->items->create($result['data'], (int) $this->user()['id']);
+            if ($image !== null) {
+                $this->app->items->setImage($id, $image);
+            }
+        } catch (Throwable $e) {
+            $this->app->images->delete($image);
+            throw $e;
         }
         $this->flash('success', 'Produit ajouté.');
         return $this->redirect("/item/$id");
@@ -66,15 +72,15 @@ final class ItemController extends Controller
 
     public function edit(Request $request, array $params): Response
     {
-        $item = $this->app->items->find((int) $params['id']);
-        return $item === null ? $this->notFound() : $this->renderForm($item, $this->valuesFromItem($item), []);
+        $item = $this->findItemOr404($params);
+        return $item instanceof Response ? $item : $this->renderForm($item, $this->valuesFromItem($item), []);
     }
 
     public function update(Request $request, array $params): Response
     {
-        $item = $this->app->items->find((int) $params['id']);
-        if ($item === null) {
-            return $this->notFound();
+        $item = $this->findItemOr404($params);
+        if ($item instanceof Response) {
+            return $item;
         }
         $result = Validator::item($request->inputAll());
         if ($result['errors'] !== []) {
@@ -86,10 +92,17 @@ final class ItemController extends Controller
             return $this->renderForm($item, $this->valuesFromInput($request), ['photo' => $e->getMessage()], 422);
         }
         $id = (int) $item['id'];
-        $this->app->items->update($id, $result['data']);
+        try {
+            $this->app->items->update($id, $result['data']);
+            if ($image !== null) {
+                $this->app->items->setImage($id, $image);
+            }
+        } catch (Throwable $e) {
+            $this->app->images->delete($image);
+            throw $e;
+        }
         $oldImage = $item['image_path'];
         if ($image !== null) {
-            $this->app->items->setImage($id, $image);
             $this->app->images->delete($oldImage);
         } elseif ($request->input('remove_photo') === '1' && $oldImage !== null) {
             $this->app->items->setImage($id, null);
@@ -101,9 +114,9 @@ final class ItemController extends Controller
 
     public function purchase(Request $request, array $params): Response
     {
-        $item = $this->app->items->find((int) $params['id']);
-        if ($item === null) {
-            return $this->notFound();
+        $item = $this->findItemOr404($params);
+        if ($item instanceof Response) {
+            return $item;
         }
         $result = Validator::purchase($request->inputAll(), date('Y-m-d'));
         if ($result['errors'] !== []) {
@@ -120,9 +133,9 @@ final class ItemController extends Controller
 
     public function unpurchase(Request $request, array $params): Response
     {
-        $item = $this->app->items->find((int) $params['id']);
-        if ($item === null) {
-            return $this->notFound();
+        $item = $this->findItemOr404($params);
+        if ($item instanceof Response) {
+            return $item;
         }
         $this->app->items->unmarkPurchased((int) $item['id']);
         $this->flash('success', 'Produit remis dans la liste « À acheter ».');
@@ -131,13 +144,18 @@ final class ItemController extends Controller
 
     public function delete(Request $request, array $params): Response
     {
-        $item = $this->app->items->find((int) $params['id']);
-        if ($item === null) {
-            return $this->notFound();
+        $item = $this->findItemOr404($params);
+        if ($item instanceof Response) {
+            return $item;
         }
         $this->app->images->delete($this->app->items->delete((int) $item['id']));
         $this->flash('success', 'Produit « ' . $item['title'] . ' » supprimé.');
         return $this->redirect($item['is_purchased'] ? '/purchased' : '/');
+    }
+
+    private function findItemOr404(array $params): array|Response
+    {
+        return $this->app->items->find((int) $params['id']) ?? $this->notFound();
     }
 
     /** @return string|null nom de la nouvelle photo, null si aucune photo fournie */

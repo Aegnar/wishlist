@@ -199,12 +199,13 @@ Page d'accueil = uniquement identifiant + mot de passe + case « rester connect�
 - Deux vues, choix mémorisé en `localStorage` :
   - **Cartes** : miniature, titre, prix × quantité, magasin, tags, badge priorité.
   - **Tableau** : dense, colonnes triables.
+  - *Écart accepté en V1* : le tri se choisit dans une liste déroulante de la barre de filtres (pas d'en-têtes de colonnes cliquables).
 - Totaux du filtre actif en en-tête.
 - Bouton « + Ajouter un produit ».
 
 ### Fiche produit (`/item/{id}`)
 
-Photo en grand, tous les champs, lien « Voir le produit ↗ » (`rel="noopener noreferrer"`, nouvel onglet), historique (ajouté par / le, acheté par / le / prix payé). Fil de commentaires (auteur, date relative, texte) avec ajout sans rechargement. Actions : Modifier, Marquer acheté / Désarchiver, Supprimer.
+Photo en grand, tous les champs, lien « Voir le produit ↗ » (`rel="noopener noreferrer"`, nouvel onglet), historique (ajouté par / le, acheté par / le / prix payé). Fil de commentaires (auteur, date relative, texte) avec ajout sans rechargement. *Écart accepté en V1* : dates des commentaires affichées en absolu (« 25/09/2026 à 14:30 »), pas en relatif. Actions : Modifier, Marquer acheté / Désarchiver, Supprimer.
 
 ### Formulaire (`/item/new`, `/item/{id}/edit`)
 
@@ -212,7 +213,7 @@ Champs : titre*, URL produit, magasin, prix estimé, quantité, priorité (radio
 
 **Photo** — deux méthodes, une seule photo par produit :
 1. **Upload** (sélection ou glisser-déposer) : max 8 Mo.
-2. **URL d'image** : téléchargement côté serveur (voir §6, `UrlGuard`) : max 5 Mo, timeout 10 s, 3 redirections max.
+2. **URL d'image** : téléchargement côté serveur (voir §6, `UrlGuard`) : max 5 Mo, timeout 10 s, 3 redirections max. *Écart accepté en V1* : délai total de 15 s pour l'ensemble du téléchargement, redirections comprises (établissement de chaque connexion : 5 s max).
 
 Traitement commun (`ImageStore`) : vérification du type réel (`finfo`, jpeg/png/webp/gif), décodage GD, redimensionnement (1600 px max + miniature 400 px), réencodage (WebP ou JPEG qualité 85) — supprime EXIF et neutralise les fichiers piégés. Nom de fichier aléatoire (`bin2hex(random_bytes(16))`). En modification : possibilité de remplacer ou retirer la photo ; l'ancien fichier est supprimé.
 
@@ -266,8 +267,8 @@ Thumbs.db
 
 ### Application
 
-- **Sessions** : cookie `HttpOnly`, `Secure` (désactivable en dev via config), `SameSite=Lax`, nom de session dédié ; `session_regenerate_id(true)` à la connexion ; « rester connecté » = cookie prolongé jusqu'à 30 jours d'inactivité, sinon cookie de session navigateur et déconnexion après 24 h d'inactivité ; sessions stockées dans `storage/sessions/`. Vérification à chaque requête que l'utilisateur existe toujours et est actif.
-- **Rate limiting** : 5 échecs par IP en 15 minutes → connexion bloquée 15 minutes pour cette IP (message générique).
+- **Sessions** : cookie `HttpOnly`, `Secure` (désactivable en dev via config), `SameSite=Lax`, nom de session dédié ; `session_regenerate_id(true)` à la connexion ; « rester connecté » = cookie prolongé jusqu'à 30 jours d'inactivité, sinon cookie de session navigateur et déconnexion après 24 h d'inactivité ; sessions stockées dans `storage/sessions/`. Vérification à chaque requête que l'utilisateur existe toujours et est actif, et que son mot de passe n'a pas changé depuis l'ouverture de la session (empreinte du hash en session) : un changement de mot de passe déconnecte les autres appareils. *Précision V1* : une session n'est démarrée que si la requête porte déjà le cookie de session ou vise `/login` (un visiteur anonyme redirigé ne crée aucun fichier de session).
+- **Rate limiting** : 5 échecs par IP en 15 minutes → connexion bloquée 15 minutes pour cette IP (message générique). *Précision V1* : en IPv6 le compteur porte sur le préfixe /64 ; plafond supplémentaire de 20 échecs en 15 minutes par identifiant (insensible à la casse), toutes IP confondues.
 - **CSRF** : jeton par session, champ caché dans chaque formulaire, en-tête `X-CSRF-Token` pour les appels JS ; vérifié sur toute requête POST.
 - **SQL** : requêtes préparées PDO exclusivement (`PDO::ATTR_EMULATE_PREPARES = false`, `ERRMODE_EXCEPTION`).
 - **XSS** : toute sortie échappée via `e()` (`htmlspecialchars`, `ENT_QUOTES`, UTF-8) ; les commentaires et descriptions sont affichés en texte brut (retours à la ligne conservés).

@@ -30,6 +30,8 @@ final class AccountController extends Controller
             return $this->render('account', ['title' => 'Mon compte', 'errors' => $errors], 422);
         }
         $this->app->users->updatePassword((int) $user['id'], $new);
+        // Déconnecte les autres appareils, garde celui-ci connecté.
+        $this->app->auth->refreshAfterPasswordChange((int) $user['id']);
         $this->flash('success', 'Mot de passe modifié.');
         return $this->redirect('/account');
     }

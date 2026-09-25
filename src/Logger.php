@@ -23,10 +23,10 @@ final class Logger
             $e::class,
             // Message encodé en JSON : neutralise les retours à la ligne qu'il pourrait contenir,
             // pour qu'il ne puisse pas forger de fausses lignes de journal.
-            json_encode($e->getMessage(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            json_encode($e->getMessage(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE),
             $e->getFile(),
             $e->getLine(),
-            json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE),
             $e->getTraceAsString(),
         );
         if (@file_put_contents($this->file, $line, FILE_APPEND | LOCK_EX) === false) {
