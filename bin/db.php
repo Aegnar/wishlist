@@ -131,7 +131,11 @@ try {
                 out("  ✓ $version");
             }
             out('Création du compte administrateur');
-            $username = strtolower(ask('Identifiant : ', static fn (string $v): ?string => Validator::username(strtolower($v))));
+            $username = '';
+            ask('Identifiant : ', static function (string $v) use (&$username): ?string {
+                $username = strtolower($v);
+                return Validator::username($username);
+            });
             $displayName = ask('Nom affiché : ', static fn (string $v): ?string => Validator::displayName($v));
             $password = ask(
                 'Mot de passe (10 caractères minimum) : ',

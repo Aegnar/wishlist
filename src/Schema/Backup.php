@@ -13,6 +13,7 @@ final class Backup
         private string $dir,
         private string $mysqldump = 'mysqldump',
         private int $keep = 10,
+        private int $timeout = 600,
     ) {
     }
 
@@ -37,21 +38,30 @@ final class Backup
                 throw new RuntimeException('Impossible de lancer mysqldump');
             }
             $gz = gzopen($target, 'wb6');
-            $tail = '';
-            while (!feof($pipes[1])) {
-                $chunk = fread($pipes[1], 65536);
-                if ($chunk === false || $chunk === '') {
-                    continue;
-                }
-                gzwrite($gz, $chunk);
-                $tail = substr($tail . $chunk, -512);
+            if ($gz === false) {
+                proc_terminate($process);
+                proc_close($process);
+                throw new RuntimeException("Impossible d'ouvrir le fichier de sauvegarde en écriture : $target");
             }
-            gzclose($gz);
-            $stderr = trim((string) stream_get_contents($pipes[2]));
+
+            ['tail' => $tail, 'stderr' => $stderr, 'failure' => $failure] = $this->pump($pipes, $gz);
             fclose($pipes[1]);
             fclose($pipes[2]);
-            $code = proc_close($process);
 
+            if ($failure === 'timeout') {
+                proc_terminate($process);
+                proc_close($process);
+                @unlink($target);
+                throw new RuntimeException("Sauvegarde interrompue : délai maximal dépassé ({$this->timeout}s)");
+            }
+            if ($failure === 'write') {
+                proc_terminate($process);
+                proc_close($process);
+                @unlink($target);
+                throw new RuntimeException("Échec d'écriture de la sauvegarde compressée (disque plein ?)");
+            }
+
+            $code = proc_close($process);
             if ($code !== 0 || !str_contains($tail, 'Dump completed')) {
                 @unlink($target);
                 throw new RuntimeException("Échec de mysqldump (code $code) : " . ($stderr !== '' ? $stderr : 'dump incomplet'));
@@ -61,6 +71,65 @@ final class Backup
         }
         $this->rotate();
         return $target;
+    }
+
+    /**
+     * Lit stdout et stderr sans blocage (stream_select), en écrivant stdout dans $gz au fur
+     * et à mesure : lire un flux jusqu'à la fin avant l'autre bloquerait indéfiniment si le
+     * flux ignoré se remplit (deadlock). Le tampon d'écriture est vérifié à chaque appel pour
+     * détecter un disque plein ou une écriture partielle, et une limite de temps totale évite
+     * qu'un mysqldump bloqué (ex. verrou) ne pende indéfiniment.
+     *
+     * @param array<int, resource> $pipes
+     * @param resource $gz
+     * @return array{tail: string, stderr: string, failure: 'timeout'|'write'|null}
+     */
+    private function pump(array $pipes, $gz): array
+    {
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+        $tail = '';
+        $stderr = '';
+        /** @var array<int, resource> $open */
+        $open = [1 => $pipes[1], 2 => $pipes[2]];
+        $deadline = microtime(true) + $this->timeout;
+
+        while ($open !== []) {
+            $remaining = $deadline - microtime(true);
+            if ($remaining <= 0) {
+                gzclose($gz);
+                return ['tail' => $tail, 'stderr' => $stderr, 'failure' => 'timeout'];
+            }
+            $read = array_values($open);
+            $write = null;
+            $except = null;
+            $ready = @stream_select($read, $write, $except, (int) $remaining, (int) (($remaining - floor($remaining)) * 1_000_000));
+            if ($ready === false || $ready === 0) {
+                continue; // signal interrompu ou rien à lire pour l'instant : le délai est revérifié en haut de boucle
+            }
+            foreach ($read as $stream) {
+                $fd = $stream === $pipes[1] ? 1 : 2;
+                $chunk = fread($stream, 65536);
+                if ($chunk === false || $chunk === '') {
+                    if (feof($stream)) {
+                        unset($open[$fd]);
+                    }
+                    continue;
+                }
+                if ($fd === 1) {
+                    $written = gzwrite($gz, $chunk);
+                    if ($written === false || $written < strlen($chunk)) {
+                        gzclose($gz);
+                        return ['tail' => $tail, 'stderr' => $stderr, 'failure' => 'write'];
+                    }
+                    $tail = substr($tail . $chunk, -512);
+                } else {
+                    $stderr .= $chunk;
+                }
+            }
+        }
+        gzclose($gz);
+        return ['tail' => $tail, 'stderr' => trim($stderr), 'failure' => null];
     }
 
     /** Conserve uniquement les $keep sauvegardes les plus récentes. */

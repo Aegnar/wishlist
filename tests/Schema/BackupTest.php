@@ -75,4 +75,22 @@ final class BackupTest extends DatabaseTestCase
         $this->expectException(RuntimeException::class);
         (new Backup($config, $this->dir))->run();
     }
+
+    public function testTimeoutFailsAndLeavesNoFile(): void
+    {
+        mkdir($this->dir);
+        $slowBinary = "$this->dir/slow-mysqldump";
+        file_put_contents($slowBinary, "#!/bin/sh\nsleep 5\n");
+        chmod($slowBinary, 0755);
+
+        $backup = new Backup(self::dbConfig(), $this->dir, $slowBinary, timeout: 1);
+
+        try {
+            $backup->run();
+            self::fail('Un dépassement de délai doit lever une exception');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('délai', $e->getMessage());
+        }
+        self::assertSame([], glob($this->dir . '/*.sql.gz'));
+    }
 }
