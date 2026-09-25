@@ -1,0 +1,27 @@
+# Secrets & config locale
+/config/config.php
+.env*
+
+# Données d'exécution (photos, sauvegardes, logs)
+/storage/uploads/*
+/storage/backups/*
+/storage/logs/*
+!/storage/**/.gitkeep
+
+# Dumps SQL
+*.sql
+*.sql.gz
+
+# Dépendances / caches dev
+/vendor/
+/.phpunit.cache/
+/docker/data/
+
+# IDE / OS
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+
+# Outils locaux
+/.remember/
