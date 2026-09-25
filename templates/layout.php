@@ -11,6 +11,10 @@ $navCurrent = static fn (bool $active): string => $active ? ' aria-current="page
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="<?= e($csrf ?? '') ?>">
     <title><?= e($pageTitle) ?></title>
+    <meta name="theme-color" content="#2f6f5e">
+    <link rel="manifest" href="/assets/manifest.webmanifest">
+    <link rel="icon" href="/assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
     <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
     <script src="<?= e(asset('js/app.js')) ?>" defer></script>
 <?php foreach ($scripts ?? [] as $script): ?>

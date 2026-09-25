@@ -61,3 +61,10 @@ document.querySelectorAll('input[type="file"][data-preview]').forEach((input) =>
     target.hidden = false;
   });
 });
+
+// PWA : service worker minimal (page « Pas de connexion »).
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
