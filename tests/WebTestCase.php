@@ -72,4 +72,20 @@ abstract class WebTestCase extends DatabaseTestCase
     {
         $this->app->auth->login($user, false);
     }
+
+    /** @param array<string, mixed> $overrides champs de Validator::item()['data'] */
+    protected function createItem(int $userId, array $overrides = []): int
+    {
+        return $this->app->items->create($overrides + [
+            'title' => 'Objet',
+            'description' => null,
+            'url' => null,
+            'store' => null,
+            'price_estimated' => null,
+            'quantity' => 1,
+            'priority' => 'none',
+            'tags' => [],
+            'image_url' => null,
+        ], $userId);
+    }
 }
