@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 use App\App;
+use App\Controller\AccountController;
+use App\Controller\AdminController;
 use App\Controller\AuthController;
 use App\Controller\CommentController;
 use App\Controller\ItemController;
@@ -36,4 +38,17 @@ return static function (Router $router, App $app): void {
     $comments = new CommentController($app);
     $router->post('/item/{id}/comments', $comments->store(...));
     $router->post('/comments/{id}/delete', $comments->delete(...));
+
+    $account = new AccountController($app);
+    $router->get('/account', $account->show(...));
+    $router->post('/account', $account->update(...));
+
+    $admin = new AdminController($app);
+    $router->get('/admin', $admin->index(...));
+    $router->post('/admin/users', $admin->createUser(...));
+    $router->post('/admin/users/{id}/password', $admin->resetPassword(...));
+    $router->post('/admin/users/{id}/toggle', $admin->toggleUser(...));
+    $router->post('/admin/tags/{id}/rename', $admin->renameTag(...));
+    $router->post('/admin/tags/{id}/merge', $admin->mergeTag(...));
+    $router->post('/admin/tags/{id}/delete', $admin->deleteTag(...));
 };
