@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\App;
 use App\Controller\AuthController;
+use App\Controller\CommentController;
 use App\Controller\ItemController;
 use App\Controller\MediaController;
 use App\Controller\TagController;
@@ -31,4 +32,8 @@ return static function (Router $router, App $app): void {
 
     $media = new MediaController($app);
     $router->get('/media/{file}', $media->show(...));
+
+    $comments = new CommentController($app);
+    $router->post('/item/{id}/comments', $comments->store(...));
+    $router->post('/comments/{id}/delete', $comments->delete(...));
 };
