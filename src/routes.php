@@ -22,6 +22,9 @@ return static function (Router $router, App $app): void {
     $router->post('/item', $items->store(...));
     $router->get('/item/{id}/edit', $items->edit(...));
     $router->post('/item/{id}', $items->update(...));
+    $router->post('/item/{id}/purchase', $items->purchase(...));
+    $router->post('/item/{id}/unpurchase', $items->unpurchase(...));
+    $router->post('/item/{id}/delete', $items->delete(...));
 
     $tags = new TagController($app);
     $router->get('/tags/suggest', $tags->suggest(...));

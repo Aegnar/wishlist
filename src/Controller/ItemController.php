@@ -99,6 +99,47 @@ final class ItemController extends Controller
         return $this->redirect("/item/$id");
     }
 
+    public function purchase(Request $request, array $params): Response
+    {
+        $item = $this->app->items->find((int) $params['id']);
+        if ($item === null) {
+            return $this->notFound();
+        }
+        $result = Validator::purchase($request->inputAll(), date('Y-m-d'));
+        if ($result['errors'] !== []) {
+            return $this->renderShow($item, [
+                'purchased_at' => $this->text($request, 'purchased_at'),
+                'price_paid' => $this->text($request, 'price_paid'),
+            ], $result['errors'], 422);
+        }
+        $id = (int) $item['id'];
+        $this->app->items->markPurchased($id, $result['data']['purchased_at'], $result['data']['price_paid'], (int) $this->user()['id']);
+        $this->flash('success', 'Produit marqué comme acheté.');
+        return $this->redirect("/item/$id");
+    }
+
+    public function unpurchase(Request $request, array $params): Response
+    {
+        $item = $this->app->items->find((int) $params['id']);
+        if ($item === null) {
+            return $this->notFound();
+        }
+        $this->app->items->unmarkPurchased((int) $item['id']);
+        $this->flash('success', 'Produit remis dans la liste « À acheter ».');
+        return $this->redirect('/item/' . (int) $item['id']);
+    }
+
+    public function delete(Request $request, array $params): Response
+    {
+        $item = $this->app->items->find((int) $params['id']);
+        if ($item === null) {
+            return $this->notFound();
+        }
+        $this->app->images->delete($this->app->items->delete((int) $item['id']));
+        $this->flash('success', 'Produit « ' . $item['title'] . ' » supprimé.');
+        return $this->redirect($item['is_purchased'] ? '/purchased' : '/');
+    }
+
     /** @return string|null nom de la nouvelle photo, null si aucune photo fournie */
     private function processPhoto(Request $request): ?string
     {
