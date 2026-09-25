@@ -1,0 +1,23 @@
+{
+    "name": "aegnar/wishlist",
+    "description": "Wishlist familiale auto-hébergée",
+    "type": "project",
+    "require": {
+        "php": ">=8.3",
+        "ext-curl": "*",
+        "ext-fileinfo": "*",
+        "ext-gd": "*",
+        "ext-mbstring": "*",
+        "ext-pdo": "*",
+        "ext-zlib": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload-dev": {
+        "psr-4": { "Tests\\": "tests/" }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
