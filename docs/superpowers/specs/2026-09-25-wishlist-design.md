@@ -83,6 +83,7 @@ Application PHP **rendue côté serveur** (multi-pages), avec un routeur maison 
 ├── storage/                   ← NON versionné (sauf .gitkeep)
 │   ├── uploads/
 │   ├── backups/
+│   ├── sessions/              ← sessions PHP (dossier dédié, hors nettoyage système)
 │   └── logs/
 ├── tests/                     ← PHPUnit
 ├── deploy/
@@ -243,6 +244,7 @@ Changement de mot de passe (ancien + nouveau ×2, ≥ 10 caractères).
 /storage/uploads/*
 /storage/backups/*
 /storage/logs/*
+/storage/sessions/*
 !/storage/**/.gitkeep
 *.sql
 *.sql.gz
@@ -264,7 +266,7 @@ Thumbs.db
 
 ### Application
 
-- **Sessions** : cookie `HttpOnly`, `Secure` (désactivable en dev via config), `SameSite=Lax`, nom de session dédié ; `session_regenerate_id(true)` à la connexion ; « rester connecté » = durée de vie du cookie de session 30 jours, sinon cookie de session navigateur. Vérification à chaque requête que l'utilisateur existe toujours et est actif.
+- **Sessions** : cookie `HttpOnly`, `Secure` (désactivable en dev via config), `SameSite=Lax`, nom de session dédié ; `session_regenerate_id(true)` à la connexion ; « rester connecté » = cookie prolongé jusqu'à 30 jours d'inactivité, sinon cookie de session navigateur et déconnexion après 24 h d'inactivité ; sessions stockées dans `storage/sessions/`. Vérification à chaque requête que l'utilisateur existe toujours et est actif.
 - **Rate limiting** : 5 échecs par IP en 15 minutes → connexion bloquée 15 minutes pour cette IP (message générique).
 - **CSRF** : jeton par session, champ caché dans chaque formulaire, en-tête `X-CSRF-Token` pour les appels JS ; vérifié sur toute requête POST.
 - **SQL** : requêtes préparées PDO exclusivement (`PDO::ATTR_EMULATE_PREPARES = false`, `ERRMODE_EXCEPTION`).
@@ -273,7 +275,7 @@ Thumbs.db
 - **URL produit** : seuls les schémas `http`/`https` sont acceptés (empêche `javascript:`).
 - **Anti-SSRF (`UrlGuard`)** : pour le téléchargement d'image : schéma http/https uniquement, résolution DNS puis refus des IP privées, loopback, link-local, réservées (IPv4 et IPv6) ; connexion forcée sur l'IP vérifiée (`CURLOPT_RESOLVE`) ; revérification à chaque redirection ; limite de taille appliquée pendant le téléchargement.
 - **Photos** : stockées hors de `public/`, servies par `MediaController` après contrôle de session, avec `Content-Type` fixé et `X-Content-Type-Options: nosniff`. Le nom demandé est validé par regex (hex + extension) pour empêcher toute traversée de chemin.
-- **En-têtes** : `Content-Security-Policy` (`default-src 'self'`, `img-src 'self' data:`, pas de script inline), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`.
+- **En-têtes** : `Content-Security-Policy` (`default-src 'self'`, `img-src 'self' data: blob:` pour l'aperçu photo, ni script ni style inline), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`.
 
 ## 7. Gestion de la base : installation, mises à jour, intégrité
 
@@ -303,7 +305,7 @@ Script CLI unique `bin/db.php` (refuse de s'exécuter hors CLI) :
 
 ### Vérification d'intégrité (`check`)
 
-- `schema.php` décrit le schéma attendu : tables, colonnes (type, nullabilité, défaut), index, clés étrangères.
+- `schema.php` décrit le schéma attendu : tables, colonnes (type, nullabilité — les valeurs par défaut ne sont pas comparées, leur format varie selon les versions de MariaDB), index, clés étrangères.
 - `SchemaChecker` compare avec `information_schema` et liste : tables manquantes, colonnes manquantes ou de type différent, index/FK manquants, tables inconnues (avertissement seulement).
 - Contrôles de cohérence : produits achetés sans `purchased_at`, `image_path` pointant vers un fichier absent, fichiers dans `uploads/` non référencés (orphelins, signalés, jamais supprimés automatiquement), migrations appliquées absentes du disque.
 - Un test automatisé vérifie que la base obtenue en appliquant toutes les migrations correspond exactement à `schema.php` (garde-fou contre l'oubli de mise à jour de l'un ou l'autre).
