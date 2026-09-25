@@ -93,6 +93,14 @@ final class AdminTest extends WebTestCase
         self::assertTrue(password_verify('provisoire-123', $this->app->users->find($marie['id'])['password_hash']));
     }
 
+    public function testResettingOwnPasswordKeepsAdminLoggedIn(): void
+    {
+        $this->request('POST', "/admin/users/{$this->admin['id']}/password", ['password' => 'provisoire-123', 'password_confirm' => 'provisoire-123']);
+        $this->newRequestCycle();
+
+        self::assertSame(200, $this->request('GET', '/admin')->status);
+    }
+
     public function testTagManagement(): void
     {
         $itemA = $this->createItem($this->admin['id'], ['tags' => ['meubles']]);

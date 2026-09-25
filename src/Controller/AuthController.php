@@ -23,7 +23,7 @@ final class AuthController extends Controller
         $password = $this->text($request, 'password');
         $auth = $this->app->auth;
 
-        if ($auth->isRateLimited($request->ip())) {
+        if ($auth->isRateLimited($request->ip(), $username)) {
             return $this->render('login', [
                 'title' => 'Connexion',
                 'username' => $username,

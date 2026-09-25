@@ -62,6 +62,12 @@ abstract class WebTestCase extends DatabaseTestCase
         return (new Kernel($this->app, $router))->handle($request);
     }
 
+    /** Simule une nouvelle requête HTTP : nouvelle App, donc un Auth sans utilisateur en cache. */
+    protected function newRequestCycle(): void
+    {
+        $this->app = new App($this->app->config, dirname(__DIR__));
+    }
+
     protected function createUser(string $username = 'alice', string $role = 'user', string $password = 'motdepasse-solide'): array
     {
         $id = $this->app->users->create($username, ucfirst($username), $password, $role);

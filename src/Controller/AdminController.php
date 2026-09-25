@@ -53,6 +53,9 @@ final class AdminController extends Controller
             $this->flash('error', "{$target['display_name']} : $error");
         } else {
             $this->app->users->updatePassword((int) $target['id'], $password);
+            // Les sessions de l'utilisateur ciblé expirent d'elles-mêmes (empreinte du mot de passe) ;
+            // si l'admin réinitialise son propre mot de passe, son appareil courant reste connecté.
+            $this->app->auth->refreshAfterPasswordChange((int) $target['id']);
             $this->flash('success', "Mot de passe de {$target['display_name']} réinitialisé.");
         }
         return $this->redirect('/admin#users');
