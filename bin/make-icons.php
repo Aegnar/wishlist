@@ -27,11 +27,19 @@ function drawIcon(int $size, float $scale, string $path): void
     $p = static fn (float $v): int => (int) round($center + $v * $unit);
     $len = static fn (float $v): int => (int) round($v * $unit);
 
-    // Anse : anneau (ellipse blanche puis verte) dont le bas est caché par le corps du sac.
-    imagefilledellipse($img, $p(0), $p(-14), $len(34), $len(36), $white);
-    imagefilledellipse($img, $p(0), $p(-14), $len(22), $len(24), $green);
-    // Corps du sac.
-    imagefilledrectangle($img, $p(-26), $p(-10), $p(26), $p(30), $white);
+    // Anse : arc fin (anneau ellipse blanche puis verte) dont le bas est caché par le corps du sac.
+    imagefilledellipse($img, $p(0), $p(-8), $len(28), $len(32), $white);
+    imagefilledellipse($img, $p(0), $p(-8), $len(22), $len(26), $green);
+    // Corps du sac : trapèze plus large en bas.
+    imagefilledpolygon($img, [
+        $p(-24), $p(-8),
+        $p(24), $p(-8),
+        $p(28), $p(30),
+        $p(-28), $p(30),
+    ], $white);
+    // Œillets de l'anse.
+    imagefilledellipse($img, $p(-14), $p(-2), $len(4), $len(4), $green);
+    imagefilledellipse($img, $p(14), $p(-2), $len(4), $len(4), $green);
 
     $out = imagecreatetruecolor($size, $size);
     imagecopyresampled($out, $img, 0, 0, 0, 0, $size, $size, $big, $big);
