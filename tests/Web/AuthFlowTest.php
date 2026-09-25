@@ -23,6 +23,13 @@ final class AuthFlowTest extends WebTestCase
         self::assertSame('/login', $response->headers['Location']);
     }
 
+    public function testGuestRedirectStoresNothingInSession(): void
+    {
+        $this->request('GET', '/item/1');
+
+        self::assertSame([], $_SESSION, 'pas de jeton CSRF ni autre donnée pour un visiteur redirigé');
+    }
+
     public function testGuestJsonRequestGets401(): void
     {
         $response = $this->request('GET', '/tags/suggest?q=a', headers: ['HTTP_ACCEPT' => 'application/json']);

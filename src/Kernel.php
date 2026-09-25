@@ -28,12 +28,13 @@ final class Kernel
             return $this->error($request, 403, 'Session expirée ou formulaire invalide. Rechargez la page et réessayez.');
         }
 
-        // Partagé après résolution de l'utilisateur : si user() détecte une session expirée et
-        // déconnecte, le jeton partagé doit refléter la session (nettoyée) courante, pas l'ancienne.
+        // Jeton partagé après résolution de l'utilisateur : si user() détecte une session expirée et
+        // déconnecte, il doit refléter la session (nettoyée) courante, pas l'ancienne. Il n'est créé
+        // que lorsqu'une page est rendue : la redirection d'un visiteur ne stocke rien en session.
         $user = $this->app->auth->user();
-        $view->share('csrf', Csrf::token());
         if ($user === null) {
             if (in_array($path, self::PUBLIC_PATHS, true)) {
+                $view->share('csrf', Csrf::token());
                 return $this->dispatch($request);
             }
             return $request->wantsJson()
@@ -41,6 +42,7 @@ final class Kernel
                 : Response::redirect('/login');
         }
 
+        $view->share('csrf', Csrf::token());
         $view->share('user', $user);
         if (($path === '/admin' || str_starts_with($path, '/admin/')) && $user['role'] !== 'admin') {
             return $this->error($request, 403, "Cette page est réservée à l'administrateur.");

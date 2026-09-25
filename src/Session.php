@@ -10,6 +10,16 @@ final class Session
     /** Sans « rester connecté » : 24 h d'inactivité (ou fermeture du navigateur). */
     public const DEFAULT_IDLE = 86400;
 
+    /**
+     * Une session n'est ouverte que si le client en présente déjà une (cookie) ou arrive sur /login :
+     * un visiteur anonyme redirigé vers /login ne crée aucun fichier de session.
+     */
+    public static function shouldStart(array $cookies, string $path, string $name): bool
+    {
+        $cookie = $cookies[$name] ?? null;
+        return (is_string($cookie) && $cookie !== '') || $path === '/login';
+    }
+
     public static function start(array $appConfig, string $savePath): void
     {
         if (session_status() === PHP_SESSION_ACTIVE) {
