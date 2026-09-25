@@ -6,6 +6,7 @@
 /storage/uploads/*
 /storage/backups/*
 /storage/logs/*
+/storage/sessions/*
 !/storage/**/.gitkeep
 
 # Dumps SQL
