@@ -5,6 +5,13 @@ server {
     listen [::]:80;
     server_name wishlist.example.com;
 
+    # Ne pas annoncer la version de nginx.
+    server_tokens off;
+
+    # HSTS : une fois HTTPS fonctionnel (après certbot), décommenter cette ligne dans le bloc
+    # « listen 443 » ajouté par certbot (pas dans le bloc 80), puis recharger nginx.
+    # add_header Strict-Transport-Security "max-age=31536000" always;
+
     root /var/www/wishlist/public;
     index index.php;
     client_max_body_size 10M;

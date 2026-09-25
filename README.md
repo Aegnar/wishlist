@@ -71,6 +71,9 @@ sudo -u www-data php bin/db.php install
 La commande crée les tables, demande l'identifiant, le nom et le mot de passe de l'administrateur, puis vérifie l'intégrité.
 Les autres comptes se créent ensuite depuis la page **Admin** de l'application.
 
+Changer un mot de passe (page **Mon compte**, ou réinitialisation par l'admin) déconnecte les autres appareils
+de l'utilisateur ; l'appareil sur lequel on change son propre mot de passe reste connecté.
+
 ### 6. nginx et HTTPS
 
 ```bash
@@ -79,6 +82,25 @@ sudo nano /etc/nginx/sites-available/wishlist     # remplacer wishlist.example.c
 sudo ln -s /etc/nginx/sites-available/wishlist /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx php8.3-fpm
 sudo certbot --nginx -d votre-domaine
+```
+
+Une fois HTTPS vérifié, activer HSTS : dans le bloc `listen 443` ajouté par certbot, décommenter la ligne
+`add_header Strict-Transport-Security "max-age=31536000" always;` (voir `deploy/nginx.conf.example`), puis
+`sudo nginx -t && sudo systemctl reload nginx`.
+
+### 7. Rotation du journal
+
+L'application écrit ses erreurs dans `storage/logs/app.log`. Rotation conseillée, `/etc/logrotate.d/wishlist` :
+
+```
+/var/www/wishlist/storage/logs/app.log {
+    weekly
+    rotate 8
+    compress
+    missingok
+    notifempty
+    create 0640 www-data www-data
+}
 ```
 
 ## Mise à jour

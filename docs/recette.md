@@ -41,6 +41,7 @@
 - [ ] Renommer / fusionner / supprimer un tag
 - [ ] Un utilisateur non admin reçoit 403 sur /admin
 - [ ] Mon compte : changement de mot de passe
+- [ ] Changement de mot de passe → les autres appareils sont déconnectés
 
 ## Mobile (PWA)
 - [ ] Affichage correct à 375 px de large, sans défilement horizontal
